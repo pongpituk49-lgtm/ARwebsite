@@ -1,0 +1,1048 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AR Blackjack - Finger Control</title>
+
+<!-- Google Font -->
+<link href="https://fonts.googleapis.com/css2?family=Mali:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
+
+<!-- Tone.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+<style>
+*{box-sizing:border-box}
+:root{
+  --blue:#54c8ff;
+  --pink:#ff78b7;
+  --yellow:#ffe36e;
+  --purple:#a98aff;
+  --green:#62e6a5;
+  --dark:#26345b;
+}
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  font-family:'Mali',sans-serif;
+  background:#182442;
+  color:white;
+}
+#app{
+  width:100%;
+  height:100vh;
+  height:100dvh;
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(145deg,#192a52,#384b83);
+}
+#camera{
+  position:absolute;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  transform:scaleX(-1);
+  opacity:.88;
+}
+#overlay{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  z-index:3;
+}
+.shade{
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg,rgba(12,20,45,.25),rgba(12,20,45,.48));
+  pointer-events:none;
+  z-index:2;
+}
+.screen{
+  position:absolute;
+  inset:0;
+  z-index:10;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+.hidden{display:none!important}
+
+/* Panels */
+.panel{
+  width:min(92vw,520px);
+  padding:28px;
+  border:4px solid white;
+  border-radius:32px;
+  background:linear-gradient(145deg,#fff8e9,#e4f5ff);
+  color:#33416d;
+  text-align:center;
+  box-shadow:0 12px 0 rgba(20,35,75,.25),0 20px 45px #101b3d66;
+}
+.logo{
+  font-size:clamp(32px,7vw,58px);
+  line-height:1.1;
+  font-weight:700;
+  color:#ff8b4d;
+  text-shadow:3px 4px 0 #ffe17a;
+}
+.subtitle{font-size:15px;margin:12px 0 22px}
+.primary{
+  border:3px solid white;
+  border-radius:22px;
+  padding:14px 28px;
+  font-family:inherit;
+  font-weight:700;
+  font-size:19px;
+  color:#35416d;
+  background:linear-gradient(145deg,#ffe76e,#ffb95e);
+  box-shadow:0 6px 0 #d98c43,0 9px 15px #0002;
+  cursor:pointer;
+}
+.primary:active{transform:translateY(4px);box-shadow:0 2px 0 #d98c43}
+.small-note{font-size:12px;opacity:.8;margin-top:18px}
+
+/* HUD */
+#hud{
+  position:absolute;
+  top:env(safe-area-inset-top,12px);
+  left:12px;
+  right:12px;
+  z-index:5;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  pointer-events:none;
+}
+.hud-pill{
+  background:#25345dcc;
+  border:2px solid #ffffffb5;
+  border-radius:18px;
+  padding:7px 13px;
+  font-size:13px;
+  font-weight:700;
+  box-shadow:0 4px 10px #0003;
+}
+#status{
+  position:absolute;
+  z-index:6;
+  left:50%;
+  bottom:15px;
+  transform:translateX(-50%);
+  max-width:90vw;
+  padding:9px 16px;
+  border:2px solid white;
+  border-radius:18px;
+  background:#25345ddd;
+  font-size:12px;
+  text-align:center;
+  white-space:nowrap;
+}
+
+/* AR head anchor */
+#headAnchor{
+  position:absolute;
+  z-index:4;
+  left:50%;
+  top:45%;
+  width:1px;
+  height:1px;
+  pointer-events:none;
+  transition:left .12s linear,top .12s linear;
+}
+#floatingCards{
+  position:absolute;
+  left:0;
+  top:-160px;
+  transform:translateX(-50%);
+  width:min(94vw,430px);
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  align-items:center;
+}
+.card-row{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  min-height:65px;
+}
+.row-label{
+  position:absolute;
+  left:0;
+  transform:translateY(-22px);
+  font-size:11px;
+  font-weight:700;
+  color:white;
+  text-shadow:0 2px 5px #000;
+  white-space:nowrap;
+}
+.playing-card{
+  width:47px;
+  height:65px;
+  background:#fffdf7;
+  color:#29334f;
+  border:3px solid white;
+  border-radius:9px;
+  box-shadow:0 5px 0 #b8c3d9,0 8px 15px #0005;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  font-family:Georgia,serif;
+  font-weight:bold;
+  animation:deal .35s ease-out both;
+}
+.playing-card.red{color:#e84d67}
+.playing-card .rank{font-size:21px;line-height:1}
+.playing-card .suit{font-size:19px;line-height:1}
+.playing-card.back{
+  background:repeating-linear-gradient(45deg,#6075d9 0 5px,#f3e7ff 5px 8px);
+  color:white;
+  border:3px solid white;
+}
+@keyframes deal{
+  from{opacity:0;transform:translateY(-25px) rotate(-12deg) scale(.5)}
+  to{opacity:1;transform:translateY(0) rotate(0) scale(1)}
+}
+
+/* HIT / STAND */
+.action-button{
+  position:absolute;
+  top:5px;
+  width:100px;
+  height:76px;
+  border:4px solid white;
+  border-radius:24px;
+  color:white;
+  font-family:inherit;
+  font-size:20px;
+  font-weight:700;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  gap:0;
+  box-shadow:0 7px 0 rgba(0,0,0,.2),0 10px 18px #0004;
+  text-shadow:0 2px 3px #0003;
+  transition:transform .15s;
+  pointer-events:none;
+}
+.action-button small{font-size:10px;font-weight:500}
+#hitButton{
+  left:-145px;
+  background:linear-gradient(145deg,#ff9b63,#f45b79);
+}
+#standButton{
+  left:45px;
+  background:linear-gradient(145deg,#59dca8,#22a8a0);
+}
+.action-button.active{
+  transform:scale(1.12);
+  outline:5px solid #fff36e;
+  outline-offset:4px;
+}
+#pointer{
+  position:absolute;
+  z-index:8;
+  width:30px;
+  height:30px;
+  margin:-15px 0 0 -15px;
+  pointer-events:none;
+  display:none;
+  font-size:29px;
+  filter:drop-shadow(0 2px 4px #000);
+}
+#dwellRing{
+  position:absolute;
+  z-index:7;
+  width:58px;
+  height:58px;
+  margin:-29px 0 0 -29px;
+  border-radius:50%;
+  border:5px solid #ffffff55;
+  border-top-color:#ffe66d;
+  pointer-events:none;
+  display:none;
+}
+#dwellRing.ready{
+  border-color:#6fffc1;
+  box-shadow:0 0 15px #6fffc1;
+}
+
+/* Bottom instructions */
+#instruction{
+  position:absolute;
+  z-index:5;
+  bottom:55px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(90vw,450px);
+  text-align:center;
+  font-size:12px;
+  text-shadow:0 2px 5px #000;
+  pointer-events:none;
+}
+
+/* Result */
+#resultTitle{font-size:35px;font-weight:700}
+#resultText{font-size:16px;margin:12px 0 20px}
+#scoreText{font-size:13px;margin-bottom:20px}
+#loadingText{font-size:14px;margin-top:14px}
+
+/* Responsive */
+@media(max-width:600px){
+  #floatingCards{top:-145px}
+  .playing-card{width:40px;height:57px}
+  .playing-card .rank{font-size:18px}
+  .playing-card .suit{font-size:16px}
+  .action-button{width:84px;height:68px;font-size:17px}
+  #hitButton{left:-125px}
+  #standButton{left:41px}
+  #instruction{bottom:50px;font-size:10px}
+  .hud-pill{font-size:11px;padding:6px 9px}
+}
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <video id="camera" playsinline></video>
+  <canvas id="overlay"></canvas>
+  <div class="shade"></div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-pill">🃏 AR BLACKJACK</div>
+    <div class="hud-pill">ชนะ <span id="wins">0</span> | เสมอ <span id="pushes">0</span> | แพ้ <span id="losses">0</span></div>
+  </div>
+
+  <!-- AR objects attached to detected face -->
+  <div id="headAnchor" class="hidden">
+    <div id="floatingCards">
+      <div class="card-row" id="dealerRow">
+        <span class="row-label">DEALER</span>
+      </div>
+      <div class="card-row" id="playerRow">
+        <span class="row-label">YOU</span>
+      </div>
+    </div>
+
+    <div class="action-button" id="hitButton">
+      👆 HIT
+      <small>จั่วไพ่</small>
+    </div>
+
+    <div class="action-button" id="standButton">
+      ✋ STAND
+      <small>หยุด</small>
+    </div>
+  </div>
+
+  <!-- Finger pointer -->
+  <div id="pointer">⭐</div>
+  <div id="dwellRing"></div>
+
+  <div id="instruction" class="hidden">
+    ชี้นิ้วไปที่ปุ่ม HIT หรือ STAND แล้วค้างไว้ 1.2 วินาที
+  </div>
+
+  <div id="status" class="hidden">กำลังตรวจจับใบหน้าและมือ...</div>
+
+  <!-- START SCREEN -->
+  <section id="startScreen" class="screen">
+    <div class="panel">
+      <div class="logo">AR<br>BLACKJACK</div>
+      <div class="subtitle">
+        🃏 เกมไพ่ลอยเหนือศีรษะ<br>
+        ใช้นิ้วชี้ควบคุมเกมผ่านกล้อง
+      </div>
+      <button class="primary" id="startBtn">เริ่มเล่นเกม 🚀</button>
+      <div class="small-note">
+        กรุณาอนุญาตให้เว็บไซต์ใช้กล้อง<br>
+        แนะนำให้วางกล้องในระดับใบหน้า
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULT SCREEN -->
+  <section id="resultScreen" class="screen hidden">
+    <div class="panel">
+      <div id="resultTitle">🎉 ผลการแข่งขัน</div>
+      <div id="resultText"></div>
+      <div id="scoreText"></div>
+      <button class="primary" id="nextBtn">เล่นรอบใหม่ 🔄</button>
+    </div>
+  </section>
+
+  <!-- LOADING -->
+  <section id="loadingScreen" class="screen hidden">
+    <div class="panel">
+      <div class="logo">กำลังเปิดกล้อง</div>
+      <div id="loadingText">กรุณารอสักครู่...</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* =====================================================
+   AR BLACKJACK - FINGER CONTROL
+   MediaPipe Hands + Face Detection + Tone.js
+===================================================== */
+
+const video = document.getElementById('camera');
+const canvas = document.getElementById('overlay');
+const ctx = canvas.getContext('2d');
+
+const startScreen = document.getElementById('startScreen');
+const loadingScreen = document.getElementById('loadingScreen');
+const resultScreen = document.getElementById('resultScreen');
+const hud = document.getElementById('hud');
+const statusBox = document.getElementById('status');
+const instruction = document.getElementById('instruction');
+
+const headAnchor = document.getElementById('headAnchor');
+const dealerRow = document.getElementById('dealerRow');
+const playerRow = document.getElementById('playerRow');
+
+const hitButton = document.getElementById('hitButton');
+const standButton = document.getElementById('standButton');
+
+const pointer = document.getElementById('pointer');
+const dwellRing = document.getElementById('dwellRing');
+
+let hands, faceDetection, camera;
+let cameraStarted = false;
+let gameActive = false;
+let busy = false;
+
+let deck = [];
+let playerCards = [];
+let dealerCards = [];
+
+let wins = 0;
+let losses = 0;
+let pushes = 0;
+
+let faceFound = false;
+let handFound = false;
+
+let dwellTarget = null;
+let dwellStart = 0;
+let actionLocked = false;
+
+const DWELL_TIME = 1200;
+
+/* ---------------- SOUND ---------------- */
+let soundReady = false;
+
+async function initSound(){
+  try{
+    await Tone.start();
+    soundReady = true;
+  }catch(e){
+    console.log('Audio unavailable:',e);
+  }
+}
+
+function playSound(type){
+  if(!soundReady) return;
+  try{
+    const synth = new Tone.Synth().toDestination();
+
+    if(type === 'deal'){
+      synth.triggerAttackRelease('C5','8n');
+    }else if(type === 'hit'){
+      synth.triggerAttackRelease('E5','8n');
+    }else if(type === 'win'){
+      synth.triggerAttackRelease('C6','4n');
+    }else if(type === 'lose'){
+      synth.triggerAttackRelease('C3','4n');
+    }else{
+      synth.triggerAttackRelease('G4','8n');
+    }
+  }catch(e){
+    console.log(e);
+  }
+}
+
+/* ---------------- DECK ---------------- */
+
+const suits = [
+  {symbol:'♥',red:true},
+  {symbol:'♦',red:true},
+  {symbol:'♣',red:false},
+  {symbol:'♠',red:false}
+];
+
+function createDeck(){
+  const cards = [];
+  const ranks = [
+    'A','2','3','4','5','6','7',
+    '8','9','10','J','Q','K'
+  ];
+
+  for(const suit of suits){
+    for(const rank of ranks){
+      cards.push({
+        rank,
+        suit:suit.symbol,
+        red:suit.red
+      });
+    }
+  }
+
+  // Shuffle
+  for(let i=cards.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [cards[i],cards[j]]=[cards[j],cards[i]];
+  }
+
+  return cards;
+}
+
+function drawCard(){
+  if(deck.length===0){
+    deck=createDeck();
+  }
+  return deck.pop();
+}
+
+function cardValue(card){
+  if(card.rank==='A') return 11;
+  if(['J','Q','K'].includes(card.rank)) return 10;
+  return Number(card.rank);
+}
+
+function calculateTotal(cards){
+  let total=0;
+  let aces=0;
+
+  for(const card of cards){
+    total+=cardValue(card);
+    if(card.rank==='A') aces++;
+  }
+
+  while(total>21 && aces>0){
+    total-=10;
+    aces--;
+  }
+
+  return total;
+}
+
+/* ---------------- CARD DISPLAY ---------------- */
+
+function createCardElement(card, hidden=false){
+  const element=document.createElement('div');
+  element.className='playing-card';
+
+  if(hidden){
+    element.classList.add('back');
+    element.textContent='★';
+    return element;
+  }
+
+  if(card.red) element.classList.add('red');
+
+  element.innerHTML=`
+    <div class="rank">${card.rank}</div>
+    <div class="suit">${card.suit}</div>
+  `;
+
+  return element;
+}
+
+function renderCards(showDealer=true){
+  dealerRow.innerHTML='<span class="row-label">DEALER</span>';
+  playerRow.innerHTML='<span class="row-label">YOU</span>';
+
+  dealerCards.forEach((card,index)=>{
+    const hidden=!showDealer && index===1;
+    dealerRow.appendChild(createCardElement(card,hidden));
+  });
+
+  playerCards.forEach(card=>{
+    playerRow.appendChild(createCardElement(card));
+  });
+}
+
+/* ---------------- GAME FLOW ---------------- */
+
+function newRound(){
+  deck=createDeck();
+  playerCards=[];
+  dealerCards=[];
+  busy=false;
+  gameActive=true;
+
+  dwellTarget=null;
+  actionLocked=false;
+  resetDwell();
+
+  playerCards.push(drawCard());
+  dealerCards.push(drawCard());
+  playerCards.push(drawCard());
+  dealerCards.push(drawCard());
+
+  renderCards(false);
+  playSound('deal');
+
+  updateStatus('เลือก HIT เพื่อจั่วไพ่ หรือ STAND เพื่อหยุด');
+
+  // Blackjack ตรวจตั้งแต่เริ่มต้น
+  const playerTotal=calculateTotal(playerCards);
+  const dealerTotal=calculateTotal(dealerCards);
+
+  if(playerTotal===21){
+    setTimeout(()=>{
+      if(dealerTotal===21){
+        finishRound('push');
+      }else{
+        finishRound('win','BLACKJACK! 🎉');
+      }
+    },700);
+  }
+}
+
+function playerHit(){
+  if(!gameActive || busy) return;
+
+  playerCards.push(drawCard());
+  renderCards(false);
+  playSound('hit');
+
+  const total=calculateTotal(playerCards);
+
+  updateStatus('แต้มของคุณ: '+total);
+
+  if(total>21){
+    finishRound('lose','BUST! แต้มเกิน 21');
+  }else if(total===21){
+    setTimeout(playerStand,500);
+  }
+}
+
+function playerStand(){
+  if(!gameActive || busy) return;
+
+  busy=true;
+  updateStatus('Dealer กำลังเปิดไพ่...');
+  renderCards(true);
+
+  setTimeout(dealerTurn,600);
+}
+
+function dealerTurn(){
+  if(!gameActive) return;
+
+  let total=calculateTotal(dealerCards);
+
+  if(total<17){
+    dealerCards.push(drawCard());
+    renderCards(true);
+    playSound('deal');
+
+    updateStatus('Dealer กำลังจั่วไพ่...');
+
+    setTimeout(dealerTurn,650);
+    return;
+  }
+
+  const playerTotal=calculateTotal(playerCards);
+  const dealerTotal=calculateTotal(dealerCards);
+
+  if(dealerTotal>21){
+    finishRound('win','Dealer แต้มเกิน 21!');
+  }else if(playerTotal>dealerTotal){
+    finishRound('win','คุณมีแต้มมากกว่า Dealer!');
+  }else if(playerTotal<dealerTotal){
+    finishRound('lose','Dealer มีแต้มมากกว่า');
+  }else{
+    finishRound('push','แต้มเท่ากัน!');
+  }
+}
+
+function finishRound(result,customMessage=''){
+  if(!gameActive) return;
+
+  gameActive=false;
+  busy=true;
+
+  renderCards(true);
+
+  if(result==='win'){
+    wins++;
+    playSound('win');
+    showConfetti();
+  }else if(result==='lose'){
+    losses++;
+    playSound('lose');
+  }else{
+    pushes++;
+    playSound('other');
+  }
+
+  document.getElementById('wins').textContent=wins;
+  document.getElementById('losses').textContent=losses;
+  document.getElementById('pushes').textContent=pushes;
+
+  const p=calculateTotal(playerCards);
+  const d=calculateTotal(dealerCards);
+
+  let title='เสมอกัน 🤝';
+  if(result==='win') title='คุณชนะ! 🏆';
+  if(result==='lose') title='รอบนี้แพ้แล้ว 💫';
+
+  document.getElementById('resultTitle').textContent=title;
+  document.getElementById('resultText').textContent=
+    customMessage || 'จบรอบการแข่งขัน';
+
+  document.getElementById('scoreText').innerHTML=
+    `แต้มของคุณ: <b>${p}</b> &nbsp;|&nbsp; แต้ม Dealer: <b>${d}</b><br>
+     ชนะ ${wins} รอบ | เสมอ ${pushes} รอบ | แพ้ ${losses} รอบ`;
+
+  setTimeout(()=>{
+    resultScreen.classList.remove('hidden');
+  },500);
+
+  updateStatus('จบรอบแล้ว');
+}
+
+/* ---------------- AR POSITION ---------------- */
+
+function updateHeadPosition(detection){
+  if(!detection){
+    faceFound=false;
+    return;
+  }
+
+  const box=detection.boundingBox;
+  const width=window.innerWidth;
+  const height=window.innerHeight;
+
+  // กล้องแสดงแบบ mirror จึงกลับแกน X
+  const centerX=(1-box.xCenter)*width;
+  const centerY=box.yCenter*height;
+  const faceHeight=box.height*height;
+
+  // วางวัตถุ AR ให้อยู่บริเวณเหนือศีรษะ
+  const top=centerY-faceHeight*0.58;
+
+  headAnchor.style.left=centerX+'px';
+  headAnchor.style.top=top+'px';
+
+  faceFound=true;
+  headAnchor.classList.remove('hidden');
+}
+
+/* ---------------- MEDIAPIPE DRAWING ---------------- */
+
+function resizeCanvas(){
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+}
+
+window.addEventListener('resize',resizeCanvas);
+resizeCanvas();
+
+function drawHand(results){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  handFound=false;
+
+  if(!results.multiHandLandmarks ||
+     results.multiHandLandmarks.length===0){
+    pointer.style.display='none';
+    dwellRing.style.display='none';
+    resetDwell();
+    return;
+  }
+
+  handFound=true;
+
+  const landmarks=results.multiHandLandmarks[0];
+  const w=canvas.width;
+  const h=canvas.height;
+
+  // วาด skeleton โดยกลับภาพให้ตรงกับกล้อง mirror
+  ctx.save();
+  ctx.translate(w,0);
+  ctx.scale(-1,1);
+
+  const connections=HAND_CONNECTIONS;
+
+  ctx.lineWidth=4;
+  ctx.strokeStyle='#70f5ff';
+  ctx.fillStyle='#ffe66d';
+
+  for(const [a,b] of connections){
+    const p1=landmarks[a];
+    const p2=landmarks[b];
+
+    ctx.beginPath();
+    ctx.moveTo(p1.x*w,p1.y*h);
+    ctx.lineTo(p2.x*w,p2.y*h);
+    ctx.stroke();
+  }
+
+  for(const point of landmarks){
+    ctx.beginPath();
+    ctx.arc(point.x*w,point.y*h,4,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+
+  // ปลายนิ้วชี้ landmark หมายเลข 8
+  const tip=landmarks[8];
+
+  const x=(1-tip.x)*w;
+  const y=tip.y*h;
+
+  pointer.style.display='block';
+  pointer.style.left=x+'px';
+  pointer.style.top=y+'px';
+
+  dwellRing.style.display='block';
+  dwellRing.style.left=x+'px';
+  dwellRing.style.top=y+'px';
+
+  checkHover(x,y);
+}
+
+/* ---------------- FINGER HOVER CONTROL ---------------- */
+
+function resetDwell(){
+  dwellRing.style.background='transparent';
+  dwellRing.style.borderTopColor='#ffe66d';
+  dwellRing.style.transform='rotate(0deg)';
+  dwellRing.classList.remove('ready');
+  hitButton.classList.remove('active');
+  standButton.classList.remove('active');
+}
+
+function checkHover(x,y){
+  if(!gameActive || busy){
+    resetDwell();
+    return;
+  }
+
+  const hitRect=hitButton.getBoundingClientRect();
+  const standRect=standButton.getBoundingClientRect();
+
+  let target=null;
+
+  if(x>=hitRect.left && x<=hitRect.right &&
+     y>=hitRect.top && y<=hitRect.bottom){
+    target='hit';
+  }else if(x>=standRect.left && x<=standRect.right &&
+           y>=standRect.top && y<=standRect.bottom){
+    target='stand';
+  }
+
+  if(!target){
+    dwellTarget=null;
+    actionLocked=false;
+    resetDwell();
+    return;
+  }
+
+  if(target!==dwellTarget){
+    dwellTarget=target;
+    dwellStart=performance.now();
+    actionLocked=false;
+  }
+
+  hitButton.classList.toggle('active',target==='hit');
+  standButton.classList.toggle('active',target==='stand');
+
+  const elapsed=performance.now()-dwellStart;
+  const progress=Math.min(elapsed/DWELL_TIME,1);
+
+  dwellRing.style.background=
+    `conic-gradient(#ffe66d ${progress*360}deg, #ffffff55 0deg)`;
+
+  dwellRing.style.border='4px solid #ffffff';
+  dwellRing.style.transform='rotate(-90deg)';
+
+  if(progress>=1 && !actionLocked){
+    actionLocked=true;
+    dwellRing.classList.add('ready');
+
+    if(target==='hit'){
+      playerHit();
+    }else if(target==='stand'){
+      playerStand();
+    }
+  }
+}
+
+/* ---------------- FACE DETECTION ---------------- */
+
+function onFaceResults(results){
+  if(results.detections && results.detections.length>0){
+    updateHeadPosition(results.detections[0]);
+  }else{
+    faceFound=false;
+    headAnchor.classList.add('hidden');
+  }
+}
+
+/* ---------------- MEDIAPIPE INITIALIZATION ---------------- */
+
+async function initializeAR(){
+  loadingScreen.classList.remove('hidden');
+
+  try{
+    hands=new Hands({
+      locateFile:(file)=>{
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+      }
+    });
+
+    hands.setOptions({
+      maxNumHands:1,
+      modelComplexity:1,
+      minDetectionConfidence:0.65,
+      minTrackingConfidence:0.6
+    });
+
+    hands.onResults(drawHand);
+
+    faceDetection=new FaceDetection({
+      locateFile:(file)=>{
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
+      }
+    });
+
+    faceDetection.setOptions({
+      model:'short',
+      minDetectionConfidence:0.6
+    });
+
+    faceDetection.onResults(onFaceResults);
+
+    camera=new Camera(video,{
+      onFrame:async()=>{
+        if(!cameraStarted) return;
+
+        try{
+          await Promise.all([
+            hands.send({image:video}),
+            faceDetection.send({image:video})
+          ]);
+        }catch(error){
+          console.log('Tracking error:',error);
+        }
+      },
+      width:1280,
+      height:720
+    });
+
+    await camera.start();
+
+    cameraStarted=true;
+
+    loadingScreen.classList.add('hidden');
+    startScreen.classList.add('hidden');
+
+    hud.classList.remove('hidden');
+    instruction.classList.remove('hidden');
+    statusBox.classList.remove('hidden');
+
+    headAnchor.classList.remove('hidden');
+
+    updateStatus('มองกล้องและยกนิ้วชี้ขึ้นเพื่อเริ่มเล่น');
+
+    newRound();
+
+  }catch(error){
+    console.error(error);
+
+    document.getElementById('loadingText').innerHTML=
+      'เปิดกล้องไม่สำเร็จ<br>กรุณาอนุญาตการใช้กล้อง และเปิดผ่าน HTTPS หรือ localhost';
+
+    setTimeout(()=>{
+      loadingScreen.classList.add('hidden');
+      startScreen.classList.remove('hidden');
+    },2500);
+  }
+}
+
+/* ---------------- CONFETTI ---------------- */
+
+function showConfetti(){
+  const pieces=[];
+
+  for(let i=0;i<65;i++){
+    pieces.push({
+      x:Math.random()*canvas.width,
+      y:-Math.random()*canvas.height*.4,
+      speed:2+Math.random()*4,
+      size:4+Math.random()*7,
+      color:['#ffe66d','#ff75b9','#6ce8ff','#8dffb6'][i%4]
+    });
+  }
+
+  let frame=0;
+
+  function animate(){
+    if(frame>100) return;
+
+    ctx.save();
+
+    pieces.forEach(p=>{
+      p.y+=p.speed;
+      p.x+=Math.sin(frame*.05+p.size)*1.5;
+
+      ctx.fillStyle=p.color;
+      ctx.fillRect(p.x,p.y,p.size,p.size*1.5);
+    });
+
+    ctx.restore();
+
+    frame++;
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+}
+
+/* ---------------- UI HELPERS ---------------- */
+
+function updateStatus(message){
+  statusBox.textContent=message;
+}
+
+/* ---------------- BUTTON EVENTS ---------------- */
+
+document.getElementById('startBtn').addEventListener('click',async()=>{
+  await initSound();
+  await initializeAR();
+});
+
+document.getElementById('nextBtn').addEventListener('click',()=>{
+  resultScreen.classList.add('hidden');
+  newRound();
+});
+
+/* Initial setup */
+updateStatus('พร้อมเริ่มเกม');
+</script>
+</body>
+</html>
